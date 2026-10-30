@@ -70,6 +70,22 @@ CREATE TRIGGER on_profile_updated
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+-- Prevent users from changing their own role (privilege escalation protection)
+CREATE OR REPLACE FUNCTION public.prevent_role_escalation()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- If the role is being changed and the user is modifying their own profile
+  IF NEW.role != OLD.role AND OLD.auth_id = auth.uid() THEN
+    RAISE EXCEPTION 'Users cannot modify their own role';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER prevent_self_role_escalation
+  BEFORE UPDATE OF role ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_role_escalation();
+
 -- ============================================
 -- ADMIN WHITELIST (staff login approval)
 -- ============================================

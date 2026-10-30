@@ -137,21 +137,21 @@ INSERT INTO public.events (id, name, slug, description, event_status, start_date
 );
 
 -- ---- Sample Profiles (Students) ----
--- Note: auth_id would be real Supabase Auth UUIDs; these are placeholders
+-- Note: All emails use @example.com (RFC 2606 reserved for documentation/testing)
 INSERT INTO public.profiles (id, auth_id, email, full_name, role, student_id, grade_level, graduation_year, technical_skills, github_url, shirt_size, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, parent_consent_status, gpa_cleared, membership_active, travel_eligible) VALUES
-('p1000001', 'auth-student-001', 'alex.rodriguez@students.dadeschools.net', 'Alex Rodriguez', 'student', 'SAS2024001', 11, 2026, ARRAY['Python', 'React', 'TensorFlow'], 'https://github.com/alexrodriguez', 'M', 'Maria Rodriguez', '(305) 555-0101', 'Parent', 'approved', true, true, true),
-('p1000002', 'auth-student-002', 'jordan.chen@students.dadeschools.net', 'Jordan Chen', 'student', 'SAS2024002', 12, 2025, ARRAY['JavaScript', 'Node.js', 'Three.js', 'Blender'], 'https://github.com/jordanchen', 'L', 'David Chen', '(305) 555-0102', 'Parent', 'approved', true, true, true),
-('p1000003', 'auth-student-003', 'taylor.williams@students.dadeschools.net', 'Taylor Williams', 'student', 'SAS2024003', 10, 2027, ARRAY['Java', 'Android', 'Firebase', 'UI/UX'], 'https://github.com/taylorw', 'S', 'Pat Williams', '(305) 555-0103', 'Guardian', 'approved', true, true, true),
-('p1000004', 'auth-student-004', 'casey.kim@students.dadeschools.net', 'Casey Kim', 'student', 'SAS2024004', 11, 2026, ARRAY['Python', 'Django', 'PostgreSQL', 'Docker'], 'https://github.com/caseykim', 'M', 'Soo Kim', '(305) 555-0104', 'Parent', 'pending', false, true, false),
-('p1000005', 'auth-student-005', 'morgan.johnson@students.dadeschools.net', 'Morgan Johnson', 'student', 'SAS2024005', 12, 2025, ARRAY['Swift', 'iOS', 'ARKit', 'Machine Learning'], 'https://github.com/morganj', 'XL', 'Robert Johnson', '(305) 555-0105', 'Parent', 'approved', true, true, true),
-('p1000006', 'auth-student-006', 'riley.garcia@students.dadeschools.net', 'Riley Garcia', 'student', 'SAS2024006', 9, 2028, ARRAY['HTML/CSS', 'JavaScript', 'Figma'], NULL, 'M', 'Ana Garcia', '(305) 555-0106', 'Parent', 'not_submitted', false, true, false),
-('p1000007', 'auth-officer-001', 'ms.patel@dadeschools.net', 'Dr. Meera Patel', 'faculty_advisor', NULL, NULL, NULL, ARRAY['Computer Science Education'], NULL, NULL, NULL, NULL, NULL, NULL, true, true, true),
-('p1000008', 'auth-officer-002', 'sam.reyes@students.dadeschools.net', 'Sam Reyes', 'officer', 'SAS2024099', 12, 2025, ARRAY['React', 'TypeScript', 'Supabase', 'Leadership'], 'https://github.com/samreyes', 'L', 'Carlos Reyes', '(305) 555-0199', 'Parent', 'approved', true, true, true);
+('p1000001', 'auth-student-001', 'alex.rodriguez@example.com', 'Alex Rodriguez', 'student', 'SAS2024001', 11, 2026, ARRAY['Python', 'React', 'TensorFlow'], 'https://github.com/alexrodriguez', 'M', 'Maria Rodriguez', '(305) 555-0101', 'Parent', 'approved', true, true, true),
+('p1000002', 'auth-student-002', 'jordan.chen@example.com', 'Jordan Chen', 'student', 'SAS2024002', 12, 2025, ARRAY['JavaScript', 'Node.js', 'Three.js', 'Blender'], 'https://github.com/jordanchen', 'L', 'David Chen', '(305) 555-0102', 'Parent', 'approved', true, true, true),
+('p1000003', 'auth-student-003', 'taylor.williams@example.com', 'Taylor Williams', 'student', 'SAS2024003', 10, 2027, ARRAY['Java', 'Android', 'Firebase', 'UI/UX'], 'https://github.com/taylorw', 'S', 'Pat Williams', '(305) 555-0103', 'Guardian', 'approved', true, true, true),
+('p1000004', 'auth-student-004', 'casey.kim@example.com', 'Casey Kim', 'student', 'SAS2024004', 11, 2026, ARRAY['Python', 'Django', 'PostgreSQL', 'Docker'], 'https://github.com/caseykim', 'M', 'Soo Kim', '(305) 555-0104', 'Parent', 'pending', false, true, false),
+('p1000005', 'auth-student-005', 'morgan.johnson@example.com', 'Morgan Johnson', 'student', 'SAS2024005', 12, 2025, ARRAY['Swift', 'iOS', 'ARKit', 'Machine Learning'], 'https://github.com/morganj', 'XL', 'Robert Johnson', '(305) 555-0105', 'Parent', 'approved', true, true, true),
+('p1000006', 'auth-student-006', 'riley.garcia@example.com', 'Riley Garcia', 'student', 'SAS2024006', 9, 2028, ARRAY['HTML/CSS', 'JavaScript', 'Figma'], NULL, 'M', 'Ana Garcia', '(305) 555-0106', 'Parent', 'not_submitted', false, true, false),
+('p1000007', 'auth-officer-001', 'dr.patel@example.com', 'Dr. Meera Patel', 'faculty_advisor', NULL, NULL, NULL, ARRAY['Computer Science Education'], NULL, NULL, NULL, NULL, NULL, NULL, true, true, true),
+('p1000008', 'auth-officer-002', 'sam.reyes@example.com', 'Sam Reyes', 'officer', 'SAS2024099', 12, 2025, ARRAY['React', 'TypeScript', 'Supabase', 'Leadership'], 'https://github.com/samreyes', 'L', 'Carlos Reyes', '(305) 555-0199', 'Parent', 'approved', true, true, true);
 
 -- ---- Admin Whitelist for Staff ----
 INSERT INTO public.admin_whitelist (email, role, added_by) VALUES
-('ms.patel@dadeschools.net', 'faculty_advisor', 'p1000007'),
-('principal.leon@dadeschools.net', 'officer', 'p1000007');
+('dr.patel@example.com', 'faculty_advisor', 'p1000007'),
+('principal.leon@example.com', 'officer', 'p1000007');
 
 -- ---- Sample Equipment ----
 INSERT INTO public.equipment_items (id, name, category, serial_number, status) VALUES
