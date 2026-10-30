@@ -14,12 +14,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   auth_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT NOT NULL,
-  first_name TEXT GENERATED ALWAYS AS (split_part(full_name, ' ', 1)) STORED,
-  last_name TEXT GENERATED ALWAYS AS (
-    CASE WHEN array_length(string_to_array(full_name, ' '), 1) > 1
-    THEN array_to_string(string_to_array(full_name, ' '))[2:array_length(string_to_array(full_name, ' '), 1)], ' ')
-    ELSE '' END
-  ) STORED,
   role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student','officer','faculty_advisor','mentor')),
 
   -- Student fields
@@ -463,7 +457,7 @@ RETURNS TEXT[] AS $$
 DECLARE
   names TEXT[];
 BEGIN
-  SELECT ARRAY_AGG(first_name) INTO names
+  SELECT ARRAY_AGG(split_part(p.full_name, ' ', 1)) INTO names
   FROM profiles p
   JOIN team_members tm ON tm.user_id = p.id
   WHERE tm.team_id = p_team_id AND tm.invite_status = 'accepted';
