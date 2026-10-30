@@ -1,0 +1,277 @@
+@import "tailwindcss";
+
+/* ============================================
+   SAS Wolfson White Tigers Brand System
+   ============================================ */
+
+:root {
+  --navy: #0A192F;
+  --royal: #1E3A8A;
+  --white: #FFFFFF;
+  --silver: #E2E8F0;
+  --gold: #F59E0B;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--white);
+  color: var(--navy);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* ---- Typography ---- */
+h1, h2, h3, h4 { color: var(--navy); line-height: 1.2; }
+h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+h2 { font-size: 1.5rem; font-weight: 700; }
+h3 { font-size: 1.25rem; font-weight: 600; }
+
+@media (min-width: 768px) {
+  h1 { font-size: 2.75rem; }
+  h2 { font-size: 1.875rem; }
+}
+
+/* ---- Status Badges ---- */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide;
+}
+.badge-registered   { @apply bg-blue-100 text-blue-800; }
+.badge-waitlisted   { @apply bg-amber-100 text-amber-800; }
+.badge-approved     { @apply bg-green-100 text-green-800; }
+.badge-checked-in   { @apply bg-emerald-100 text-emerald-800; }
+.badge-draft        { @apply bg-gray-100 text-gray-600; }
+.badge-published    { @apply bg-indigo-100 text-indigo-800; }
+.badge-cancelled    { @apply bg-red-100 text-red-800; }
+.badge-missing-docs { @apply bg-orange-100 text-orange-800; }
+
+/* ---- Cards ---- */
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 transition-shadow duration-200;
+}
+.card:hover { @apply shadow-md; }
+.card-static {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6;
+}
+
+/* ---- Countdown Timer Segments ---- */
+.countdown-grid {
+  @apply grid grid-cols-4 gap-2 sm:gap-3 max-w-md mx-auto;
+}
+.countdown-segment {
+  @apply flex flex-col items-center justify-center bg-[#0A192F] text-white rounded-lg p-2 sm:p-3 min-w-[56px] sm:min-w-[72px];
+}
+.countdown-number {
+  @apply text-2xl sm:text-4xl font-bold tabular-nums leading-none;
+}
+.countdown-label {
+  @apply text-[9px] sm:text-[11px] uppercase tracking-widest text-gray-400 mt-1;
+}
+.countdown-separator {
+  @apply text-2xl sm:text-4xl font-bold text-[#0A192F] self-center;
+}
+
+/* ---- Form Controls ---- */
+.input-field {
+  @apply w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+         focus:ring-2 focus:ring-[#1E3A8A]/30 focus:border-[#1E3A8A]
+         outline-none transition-all placeholder:text-gray-400;
+}
+.textarea-field {
+  @apply w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+         focus:ring-2 focus:ring-[#1E3A8A]/30 focus:border-[#1E3A8A]
+         outline-none transition-all placeholder:text-gray-400 resize-y min-h-[80px];
+}
+.select-field {
+  @apply w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+         focus:ring-2 focus:ring-[#1E3A8A]/30 focus:border-[#1E3A8A]
+         outline-none transition-all placeholder:text-gray-400 appearance-none bg-no-repeat bg-right pr-10 cursor-pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.6rem center;
+  background-size: 1.25em 1.25em;
+}
+.label {
+  @apply block text-sm font-semibold text-gray-700 mb-1;
+}
+.hint {
+  @apply block text-xs text-gray-500 mt-0.5;
+}
+.field-error {
+  @apply block text-xs text-red-600 mt-0.5 font-medium;
+}
+
+/* ---- Buttons ---- */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed
+         bg-[#1E3A8A] text-white hover:bg-[#0A192F] active:bg-[#1E3A8A]/80;
+}
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed
+         bg-white text-[#1E3A8A] border-2 border-[#1E3A8A] hover:bg-gray-50 active:bg-gray-100;
+}
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed
+         bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+}
+.btn-success {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed
+         bg-green-600 text-white hover:bg-green-700 active:bg-green-800;
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
+         transition-all duration-150 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed
+         bg-transparent text-gray-600 hover:bg-gray-100 active:bg-gray-200;
+}
+.btn-sm {
+  @apply px-3 py-1.5 text-xs;
+}
+.btn-lg {
+  @apply px-6 py-3 text-base;
+}
+
+/* ---- Data Tables ---- */
+@media (max-width: 767px) {
+  .data-table thead { display: none; }
+  .data-table tbody tr {
+    @apply block mb-3 border rounded-lg p-3 bg-white;
+  }
+  .data-table td {
+    @apply block text-sm py-1;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border: none !important;
+  }
+  .data-table td::before {
+    content: attr(data-label);
+    @apply font-semibold text-gray-500 mr-3 shrink-0;
+  }
+}
+@media (min-width: 768px) {
+  .data-table { @apply w-full text-left border-collapse; }
+  .data-table thead { @apply sticky top-0 z-10; }
+  .data-table th {
+    @apply bg-gray-50 px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200;
+  }
+  .data-table td {
+    @apply px-4 py-3 text-sm border-b border-gray-100;
+  }
+  .data-table tbody tr:hover { @apply bg-blue-50/50; }
+  .data-table tbody tr:nth-child(even) { @apply bg-gray-50/30; }
+}
+
+/* ---- Mobile Bottom Navigation ---- */
+.mobile-nav {
+  @apply fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-50
+         flex justify-around items-center pb-[env(safe-area-inset-bottom,0px)];
+  height: 64px;
+}
+.mobile-nav-item {
+  @apply flex flex-col items-center justify-center gap-0.5 min-w-[48px] min-h-[48px]
+         text-gray-400 rounded-lg transition-colors cursor-pointer;
+}
+.mobile-nav-item.active {
+  @apply text-[#1E3A8A];
+}
+.mobile-nav-item svg { width: 22px; height: 22px; }
+.mobile-nav-item span { font-size: 10px; font-weight: 600; }
+
+/* ---- Top Navigation Bar ---- */
+.topnav {
+  @apply sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200;
+  height: 60px;
+}
+.topnav-inner {
+  @apply max-w-7xl mx-auto px-4 h-full flex items-center justify-between;
+}
+
+/* ---- Offline Banner ---- */
+.offline-banner {
+  @apply fixed top-[60px] left-0 right-0 bg-amber-500 text-black text-center text-sm py-2 z-[100] font-bold;
+}
+
+/* ---- QR Code Container ---- */
+.qr-container {
+  @apply bg-white p-4 rounded-2xl shadow-inner border-2 border-dashed border-gray-200 inline-block;
+}
+
+/* ---- Page Container ---- */
+.page-container {
+  @apply max-w-7xl mx-auto px-4 py-6 sm:py-8 w-full flex-1;
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1024px) {
+  .page-container { padding-bottom: 2rem; }
+}
+
+/* ---- Grid Utilities ---- */
+.grid-auto-fit {
+  @apply grid gap-4;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ---- Animations ---- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+.animate-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.animate-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.animate-delay-3 { animation-delay: 0.3s; opacity: 0; }
+
+/* ---- Skeleton Loading ---- */
+.skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+/* ---- Role Badge Colors ---- */
+.role-student       { @apply bg-blue-100 text-blue-700; }
+.role-officer       { @apply bg-purple-100 text-purple-700; }
+.role-faculty       { @apply bg-amber-100 text-amber-700; }
+.role-mentor        { @apply bg-teal-100 text-teal-700; }
