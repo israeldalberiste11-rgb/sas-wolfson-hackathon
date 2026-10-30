@@ -31,6 +31,7 @@ body {
   background-color: var(--white);
   color: var(--navy);
   min-height: 100vh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -45,7 +46,7 @@ body {
 }
 
 /* ---- Typography ---- */
-h1, h2, h3, h4 { color: var(--navy); line-height: 1.2; }
+h1, h2, h3, h4 { line-height: 1.2; }
 h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
 h2 { font-size: 1.5rem; font-weight: 700; }
 h3 { font-size: 1.25rem; font-weight: 600; }

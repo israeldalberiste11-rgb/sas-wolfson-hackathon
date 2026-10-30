@@ -86,28 +86,35 @@ export default function TeamBuilderPage() {
 
   const sendInvite = async (inviteeId: string) => {
     if (!currentTeam) return
-    // Check max team size
-    if (members.length >= (currentTeam.max_members || 4)) {
+    const acceptedCount = members.filter(m => m.invite_status === 'accepted').length
+    // Check max team size (accepted + pending count toward roster limit)
+    if (acceptedCount >= (currentTeam.max_members || 4)) {
       setActionMsg(`Team is full (max ${currentTeam.max_members} members)`)
       setTimeout(() => setActionMsg(''), 4000)
       return
     }
-    // Check already on team for this event
-    const eventId = currentTeam.event_id
-    await supabase.from('team_members')
-      .select('id')
-      .eq('user_id', inviteeId)
-      .in('team_id', (
-        supabase.from('teams').select('id').eq('event_id', eventId) as any
-      ))
-    // Simplified check
-    await supabase.from('team_members').insert({
+    // Prevent duplicate invites
+    if (members.some(m => m.user_id === inviteeId)) {
+      setActionMsg('This student is already on the team or has a pending invite.')
+      setTimeout(() => setActionMsg(''), 4000)
+      return
+    }
+    const { error } = await supabase.from('team_members').insert({
       team_id: currentTeam.id,
       user_id: inviteeId,
       role: 'member',
       invite_status: 'pending',
     })
-    setActionMsg('Invite sent!')
+    if (error) {
+      setActionMsg(`Invite failed: ${error.message}`)
+    } else {
+      setActionMsg('Invite sent!')
+      // Refresh member list
+      const { data: updatedMembers } = await supabase.from('team_members')
+        .select('*, user:profiles(*)')
+        .eq('team_id', currentTeam.id)
+      if (updatedMembers) setMembers(updatedMembers as unknown as TeamMember[])
+    }
     setSearchResults([])
     setInviteEmail('')
     setInviteStudentId('')

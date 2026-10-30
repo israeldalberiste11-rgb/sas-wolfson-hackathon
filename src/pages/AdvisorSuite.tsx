@@ -184,7 +184,7 @@ function ChaperoneRatioPanel() {
                 {chaperones.map(c => (
                   <tr key={c.id}>
                     <td data-label="Name">{c.external_name || (c.user_id as any)}</td>
-                    <td data-label="Role"><span className="badge role-{c.role}">{c.role.replace('_', ' ')}</span></td>
+                    <td data-label="Role"><span className={`badge role-${c.role}`}>{c.role.replace('_', ' ')}</span></td>
                     <td data-label="Phone">{c.external_phone || '—'}</td>
                     <td data-label="Confirmed">
                       {c.confirmed

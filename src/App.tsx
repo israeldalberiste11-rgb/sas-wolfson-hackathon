@@ -42,7 +42,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
 
 // Public route (redirects to dashboard if already logged in)
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -50,7 +50,12 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     </div>
   )
 
-  if (user) return <Navigate to="/student/dashboard" replace />
+  if (user) {
+    // Redirect to role-appropriate dashboard
+    if (profile?.role === 'officer') return <Navigate to="/officer/console" replace />
+    if (profile?.role === 'faculty_advisor') return <Navigate to="/advisor/compliance" replace />
+    return <Navigate to="/student/dashboard" replace />
+  }
 
   return <>{children}</>
 }

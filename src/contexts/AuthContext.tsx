@@ -47,10 +47,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Get initial session — always settle loading, even if Supabase is
     // unreachable or credentials are placeholders
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+      .then(async ({ data: { session } }) => {
         setState(prev => ({ ...prev, session, user: session?.user ?? null }))
         if (session?.user) {
-          return getCurrentProfile().then(() => {})
+          try {
+            const profile = await getCurrentProfile()
+            setState(prev => ({ ...prev, profile, loading: false }))
+          } catch {
+            setState(prev => ({ ...prev, loading: false }))
+          }
         }
       })
       .catch((err) => console.warn('Auth init failed:', err?.message))

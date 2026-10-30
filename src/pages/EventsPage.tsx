@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { HackathonEvent, EventRegistration } from '../types'
 import CountdownTimer from '../components/CountdownTimer'
 import StatusBadge from '../components/StatusBadge'
@@ -95,7 +95,46 @@ export default function EventsPage() {
               event={event}
               registration={registrations.find(r => r.event_id === event.id)}
               isRegistered={!!registrations.find(r => r.event_id === event.id)}
-              onRegister={() => handleRegister(event)}
+              onRegister={async () => {
+                if (!user) {
+                  window.location.href = '/login'
+                  return
+                }
+                if (!isSupabaseConfigured) return
+                // Check existing registration
+                const { data: existing } = await supabase
+                  .from('event_registrations')
+                  .select('id')
+                  .eq('event_id', event.id)
+                  .eq('user_id', user.id)
+                  .maybeSingle()
+                if (existing) return
+                // Count current registrations to determine waitlist
+                const { count } = await supabase
+                  .from('event_registrations')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('event_id', event.id)
+                  .in('status', ['registered', 'approved_to_travel'])
+                const isWaitlist = (count ?? 0) >= event.bus_capacity
+                await supabase.from('event_registrations').insert({
+                  event_id: event.id,
+                  user_id: user.id,
+                  status: isWaitlist ? 'waitlisted' : 'registered',
+                  waitlist_position: isWaitlist ? (count ?? 0) + 1 : null,
+                  transport_requested: event.transport_provided,
+                  deposit_paid: false,
+                  deposit_refunded: false,
+                  excused: false,
+                  luma_synced: false,
+                  reimbursement_status: 'none',
+                })
+                // Reload registrations so the UI updates
+                const { data: regData } = await supabase
+                  .from('event_registrations')
+                  .select('*, event:events(*)')
+                  .eq('user_id', user.id)
+                if (regData) setRegistrations(regData as unknown as EventRegistration[])
+              }}
             />
           ))}
           {upcomingEvents.length === 0 && !loading && (
@@ -271,7 +310,4 @@ function EventDetailCard({
   )
 }
 
-async function handleRegister(event: HackathonEvent) {
-  // This would be connected to actual registration logic
-  alert(`Registration for "${event.name}" — this will connect to Supabase when the database is provisioned.`)
-}
+// Registration is handled inline in EventDetailCard's onRegister callback.

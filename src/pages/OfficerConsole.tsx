@@ -433,7 +433,7 @@ function RegistrationManager() {
           {events.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select-field w-40">
-          <option value="">All Statuses</option>
+          <option value="all">All Statuses</option>
           {['registered', 'waitlisted', 'approved_to_travel', 'checked_in', 'cancelled', 'no_show'].map(s => (
             <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
           ))}
