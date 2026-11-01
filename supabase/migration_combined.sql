@@ -1,11 +1,13 @@
 -- ================================================================
 -- SAS WOLFSON HACKATHON CLUB — COMBINED MIGRATION (MANUAL RUN)
 -- Target project: cjfcmekdvmorrmttxcet (dev, empty)
--- Sections execute in order: (1) schema + RLS  (2) seed data
--- (3) storage buckets + storage policies
--- Review status: audited 2026-10-30 — no destructive ops, all
--- accounts use @example.com (RFC 2606), RLS privilege-escalation
--- trigger included.
+-- Sections execute in order:
+--   (1) schema + triggers + functions + RLS policies
+--   (2) storage buckets + storage policies
+--   (3) seed data (fictional @example.com accounts)
+-- Audited 2026-10-31: no destructive ops, no real student emails,
+-- privilege-escalation trigger included, safe to re-run (IF NOT EXISTS
+-- / ON CONFLICT DO NOTHING throughout).
 -- ================================================================
 
 
@@ -738,6 +740,8 @@ INSERT INTO storage.buckets (id, name, public) VALUES
   ('showcase-screenshots', 'showcase-screenshots', true)
 ON CONFLICT (id) DO NOTHING;
 
+
+-- ============================================
 -- Storage Policies for SAS Wolfson Hackathon Club
 -- Run this AFTER creating storage buckets
 -- ============================================
@@ -844,8 +848,8 @@ USING (
   )
 );
 
--- ============================================
 
+-- ============================================
 -- SAS Wolfson Hackathon Club — Seed Data
 -- Run this AFTER schema.sql to populate sample data
 -- ============================================
@@ -1079,6 +1083,3 @@ INSERT INTO public.app_notifications (id, user_id, title, body, type, read) VALU
 ('notif003', 'p1000002', 'New Team Invite', 'Alex Rodriguez has invited you to join "CodeTigers Alpha" for ShellHacks 2025.', 'info', true),
 ('notif004', 'p1000004', 'Parent Consent Pending', 'Your parent consent form is still pending. Upload it to become eligible for travel.', 'warning', false),
 ('notif005', 'p1000005', 'Equipment Overdue', 'Your USB-C Hub (eq009) is overdue. Please return it to avoid check-in blocks.', 'urgent', false);
-
-
--- ============================================
