@@ -92,7 +92,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER prevent_self_role_escalation
   BEFORE UPDATE OF role ON public.profiles
   FOR EACH ROW
-  WHEN (OLD.auth_id IS NOT NULL AND OLD.auth_id = auth.uid())
+  WHEN (OLD.auth_id IS NOT NULL AND OLD.auth_id = auth.uid() AND NEW.role IS DISTINCT FROM OLD.role)
   EXECUTE FUNCTION public.prevent_role_escalation();
 
 -- ============================================
@@ -527,11 +527,25 @@ CREATE TABLE IF NOT EXISTS public.app_notifications (
 CREATE INDEX idx_notifications_user ON public.app_notifications(user_id, read, created_at DESC);
 
 -- ============================================
+-- STRICT MODE: revoke default Supabase grants first.
+-- Supabase grants SELECT to anon/authenticated on new tables by default;
+-- policies are additive, so without revoking, every table below would be
+-- world-readable despite RLS (PII + financial exposure). Re-grant the minimum.
+-- ============================================
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
+-- anon receives only the privacy-safe public view (granted after CREATE VIEW below)
+
+-- ============================================
 -- ROW LEVEL SECURITY POLICIES
 -- ============================================
 
--- Enable RLS on all tables
+-- Enable RLS on every table — no exceptions
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_whitelist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
@@ -542,7 +556,6 @@ ALTER TABLE public.budget_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.past_showcases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chaperone_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admin_whitelist ENABLE ROW LEVEL SECURITY;
 
 -- ---- PROFILES RLS ----
 -- Students see their own profile + teammates' names/contact
@@ -570,6 +583,14 @@ CREATE POLICY "Users can create own student profile" ON public.profiles
   FOR INSERT WITH CHECK (
     auth.uid() = auth_id AND role = 'student'
   );
+
+-- Staff must be able to update other profiles (advisor flips GPA/clearance,
+-- officer toggles membership). Students keep only their own row via policy above.
+CREATE POLICY "Staff can update other profiles" ON public.profiles
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('officer', 'faculty_advisor'))
+  )
+  WITH CHECK (TRUE);
 
 -- ---- EVENTS RLS ----
 -- Authenticated users can view events (staff can also manage) + own showcase drafts can read their event
@@ -682,6 +703,17 @@ CREATE POLICY "Officers and faculty manage chaperones" ON public.chaperone_assig
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('officer', 'faculty_advisor'))
   );
 
+-- Students may see who is chaperoning their own trip (own event, active status only)
+CREATE POLICY "Students can view own event chaperones" ON public.chaperone_assignments
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.event_registrations er
+      WHERE er.event_id = chaperone_assignments.event_id
+        AND er.user_id = auth.uid()
+        AND er.status IN ('registered', 'approved_to_travel', 'checked_in')
+    )
+  );
+
 -- ---- NOTIFICATIONS RLS ----
 CREATE POLICY "Users view own notifications" ON public.app_notifications
   FOR SELECT USING (user_id = auth.uid());
@@ -696,6 +728,11 @@ CREATE POLICY "Users update own notifications" ON public.app_notifications
 -- ---- ADMIN WHITELIST RLS ----
 CREATE POLICY "Only faculty manages whitelist" ON public.admin_whitelist
   FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'faculty_advisor')
+  );
+
+CREATE POLICY "Only faculty inserts whitelist entries" ON public.admin_whitelist
+  FOR INSERT WITH CHECK (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'faculty_advisor')
   );
 
@@ -737,7 +774,7 @@ BEGIN
       (SELECT COALESCE(array_agg(awards_won), '{}') FROM past_showcases WHERE status = 'published')::jsonb
     ))::int,
     'total_prize_money', COALESCE(SUM(prize_money), 0),
-    (SELECT COUNT(*) FROM public.profiles WHERE membership_active = TRUE),
+    'active_members', (SELECT COUNT(*) FROM public.profiles WHERE membership_active = TRUE),
     'upcoming_event_name', (SELECT name FROM events WHERE event_status IN ('upcoming','registration_open') ORDER BY start_date_time ASC LIMIT 1),
     'upcoming_event_start', (SELECT start_date_time FROM events WHERE event_status IN ('upcoming','registration_open') ORDER BY start_date_time ASC LIMIT 1)
   ) INTO result
