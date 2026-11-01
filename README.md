@@ -6,7 +6,7 @@ A React + Supabase web application for the School for Advanced Studies (SAS) Wol
 
 - **Frontend:** React 19, TypeScript, Tailwind CSS v4, Vite 8, `vite-plugin-pwa` (service worker + manifest), `idb` (IndexedDB), `qrcode.react`, `lucide-react`
 - **Backend:** Supabase — PostgreSQL (RLS on every table), Auth (Google OAuth with `@students.dadeschools.net` domain restriction), Storage, Realtime
-- **Schema & seed:** `supabase/schema.sql`, `supabase/seed.sql`
+- **Schema & seed:** `supabase/migration_combined.sql` (canonical — run this one; `supabase/schema.sql` / `seed.sql` / `storage_policies.sql` are its source components)
 
 ## Roles
 
@@ -38,17 +38,22 @@ npm run dev
 
 ### Supabase
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. SQL Editor → run `supabase/schema.sql`, then `supabase/seed.sql`
+1. Project exists: **SAS Hackathon Club project** (`cjfcmekdvmorrmttxcet`)
+2. SQL Editor → run **`supabase/migration_combined.sql`** (one file: schema + RLS + storage buckets/policies + fictional seed; idempotent, safe to re-run)
 3. Authentication → Providers → Google: enable, add client ID/secret, and restrict the allowed domain to `students.dadeschools.net` (staff `@dadeschools.net` accounts use the magic-link path verified against the `admin_whitelist` table)
-4. Storage → create private buckets `consent-forms` and `receipts`, public bucket `showcase-screenshots`
-5. Copy Project URL + anon key into `.env.local`
+4. Authentication → URL Configuration → add `http://localhost:5173/auth/callback` to Redirect URLs
+5. Copy Project URL + anon key into `.env.local` (already present locally; gitignored)
 
 ## Notes
 
 - With no `.env.local`, the app runs in a signed-out demo mode (auth settles immediately, data lists are empty).
 - `npm install` needs `--legacy-peer-deps` on this toolchain (npm/arborist peer-resolution bug).
 - Node 20.19 is installed at `~/local/node/bin` on this machine if `node` isn't on PATH.
+
+## Testing
+
+- **Automated:** `npm test -- --run` — 22 unit tests (utils: domain validation, Devpost URL, Lu.ma ref, chaperone math, name extraction; supabase: case-insensitive district checks, config detection). Last run: **22/22 passing**, production build green.
+- **Manual:** see [`MANUAL_TESTING.md`](./MANUAL_TESTING.md) — 40+ checks across home, auth, student dashboard, registration/waitlist, teams, QR/offline, officer console, advisor suite, role-security negative tests, and the three responsive breakpoints, with expected outcomes for each.
 
 ## Deployment (Vercel)
 
