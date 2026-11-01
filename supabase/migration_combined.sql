@@ -91,7 +91,9 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER prevent_self_role_escalation
   BEFORE UPDATE OF role ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.prevent_role_escalation();
+  FOR EACH ROW
+  WHEN (OLD.auth_id IS NOT NULL AND OLD.auth_id = auth.uid())
+  EXECUTE FUNCTION public.prevent_role_escalation();
 
 -- ============================================
 -- ADMIN WHITELIST (staff login approval)
@@ -167,6 +169,21 @@ CREATE INDEX idx_events_slug ON public.events(slug);
 CREATE TRIGGER on_event_updated
   BEFORE UPDATE ON public.events
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- Keep excuse_deadline in sync with event start (48h before) on insert/update
+CREATE OR REPLACE FUNCTION public.set_event_excuse_deadline()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.excuse_deadline IS NULL AND NEW.start_date_time IS NOT NULL THEN
+    NEW.excuse_deadline = NEW.start_date_time - INTERVAL '48 hours';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_event_excuse_deadline_trigger
+  BEFORE INSERT OR UPDATE OF start_date_time ON public.events
+  FOR EACH ROW EXECUTE FUNCTION public.set_event_excuse_deadline();
 
 -- ============================================
 -- TEAMS TABLE
@@ -395,7 +412,6 @@ BEGIN
   IF NEW.status = 'checked_in' THEN
     SELECT EXISTS(
       SELECT 1 FROM equipment_checkouts ec
-      JOIN equipment_items ei ON ei.id = ec.equipment_id
       WHERE ec.user_id = NEW.user_id
         AND ec.status IN ('overdue', 'lost')
     ) INTO has_overdue;
@@ -556,7 +572,7 @@ CREATE POLICY "Users can create own student profile" ON public.profiles
   );
 
 -- ---- EVENTS RLS ----
--- Authenticated users can view events
+-- Authenticated users can view events (staff can also manage) + own showcase drafts can read their event
 CREATE POLICY "Authenticated users can view events" ON public.events
   FOR SELECT USING (auth.role() = 'authenticated');
 
@@ -566,6 +582,7 @@ CREATE POLICY "Officers and faculty can manage events" ON public.events
   );
 
 -- ---- TEAMS RLS ----
+-- Team visibility = leader, accepted/pending member, or staff; everyone else sees nothing (drop-in logic depends on this)
 CREATE POLICY "Users can view own teams" ON public.teams
   FOR SELECT USING (
     auth.uid() = leader_id
@@ -720,7 +737,7 @@ BEGIN
       (SELECT COALESCE(array_agg(awards_won), '{}') FROM past_showcases WHERE status = 'published')::jsonb
     ))::int,
     'total_prize_money', COALESCE(SUM(prize_money), 0),
-    'active_members', (SELECT COUNT(*) FROM profiles WHERE membership_active = TRUE),
+    (SELECT COUNT(*) FROM public.profiles WHERE membership_active = TRUE),
     'upcoming_event_name', (SELECT name FROM events WHERE event_status IN ('upcoming','registration_open') ORDER BY start_date_time ASC LIMIT 1),
     'upcoming_event_start', (SELECT start_date_time FROM events WHERE event_status IN ('upcoming','registration_open') ORDER BY start_date_time ASC LIMIT 1)
   ) INTO result
@@ -854,6 +871,33 @@ USING (
 -- Run this AFTER schema.sql to populate sample data
 -- ============================================
 
+-- ============================================
+-- SEED DATA (fictional @example.com accounts only)
+-- Order: profiles → whitelist → events → teams → members
+-- → registrations → equipment → budget → showcases →
+-- chaperones → notifications (FK dependencies respected)
+-- Seed uses ids cast as UUIDs so literals are valid.
+-- Safe to re-run: every INSERT ... ON CONFLICT DO NOTHING.
+-- ============================================
+
+-- ---- Sample Profiles (Students + Staff) ----
+INSERT INTO public.profiles (id, auth_id, email, full_name, role, student_id, grade_level, graduation_year, technical_skills, github_url, shirt_size, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, parent_consent_status, gpa_cleared, membership_active, travel_eligible) VALUES
+('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'alex.rodriguez@example.com', 'Alex Rodriguez', 'student', 'SAS2024001', 11, 2026, ARRAY['Python', 'React', 'TensorFlow'], 'https://github.com/alexrodriguez', 'M', 'Maria Rodriguez', '(305) 555-0101', 'Parent', 'approved', true, true, true),
+('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a2', 'jordan.chen@example.com', 'Jordan Chen', 'student', 'SAS2024002', 12, 2025, ARRAY['JavaScript', 'Node.js', 'Three.js', 'Blender'], 'https://github.com/jordanchen', 'L', 'David Chen', '(305) 555-0102', 'Parent', 'approved', true, true, true),
+('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000a3', 'taylor.williams@example.com', 'Taylor Williams', 'student', 'SAS2024003', 10, 2027, ARRAY['Java', 'Android', 'Firebase', 'UI/UX'], 'https://github.com/taylorw', 'S', 'Pat Williams', '(305) 555-0103', 'Guardian', 'approved', true, true, true),
+('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-0000000000a4', 'casey.kim@example.com', 'Casey Kim', 'student', 'SAS2024004', 11, 2026, ARRAY['Python', 'Django', 'PostgreSQL', 'Docker'], 'https://github.com/caseykim', 'M', 'Soo Kim', '(305) 555-0104', 'Parent', 'pending', false, true, false),
+('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-0000000000a5', 'morgan.johnson@example.com', 'Morgan Johnson', 'student', 'SAS2024005', 12, 2025, ARRAY['Swift', 'iOS', 'ARKit', 'Machine Learning'], 'https://github.com/morganj', 'XL', 'Robert Johnson', '(305) 555-0105', 'Parent', 'approved', true, true, true),
+('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-0000000000a6', 'riley.garcia@example.com', 'Riley Garcia', 'student', 'SAS2024006', 9, 2028, ARRAY['HTML/CSS', 'JavaScript', 'Figma'], NULL, 'M', 'Ana Garcia', '(305) 555-0106', 'Parent', 'not_submitted', false, true, false),
+('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-0000000000a7', 'dr.patel@example.com', 'Dr. Meera Patel', 'faculty_advisor', NULL, NULL, NULL, ARRAY['Computer Science Education'], NULL, NULL, NULL, NULL, NULL, NULL, true, true, true),
+('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-0000000000a8', 'sam.reyes@example.com', 'Sam Reyes', 'officer', 'SAS2024099', 12, 2025, ARRAY['React', 'TypeScript', 'Supabase', 'Leadership'], 'https://github.com/samreyes', 'L', 'Carlos Reyes', '(305) 555-0199', 'Parent', 'approved', true, true, true)
+ON CONFLICT (id) DO NOTHING;
+
+-- ---- Admin Whitelist for Staff ----
+INSERT INTO public.admin_whitelist (email, role, added_by) VALUES
+('dr.patel@example.com', 'faculty_advisor', '00000000-0000-0000-0000-000000000007'),
+('principal.leon@example.com', 'officer', '00000000-0000-0000-0000-000000000007')
+ON CONFLICT (email) DO NOTHING;
+
 -- ---- Sample Events (Miami Area) ----
 INSERT INTO public.events (id, name, slug, description, event_status, start_date_time, end_date_time, registration_opens_at, registration_closes_at, submission_deadline, venue_name, venue_address, city, is_virtual, transport_provided, bus_capacity, max_team_size, eligibility_rules, requires_parent_consent, requires_gpa_clearance, stipend_cap_per_student, deposit_amount, chaperone_ratio, created_by) VALUES
 (
@@ -881,7 +925,10 @@ INSERT INTO public.events (id, name, slug, description, event_status, start_date
   20.00,
   10,
   '00000000-0000-0000-0000-000000000001'
-),
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.events (id, name, slug, description, event_status, start_date_time, end_date_time, registration_opens_at, registration_closes_at, submission_deadline, venue_name, venue_address, city, is_virtual, transport_provided, bus_capacity, max_team_size, eligibility_rules, requires_parent_consent, requires_gpa_clearance, stipend_cap_per_student, deposit_amount, chaperone_ratio, created_by) VALUES
 (
   'b2c3d4e5-f6a7-8901-bcde-f12345678902',
   'MDC Wolfson Campus Hackathon',
@@ -985,101 +1032,93 @@ INSERT INTO public.events (id, name, slug, description, event_status, start_date
   20.00,
   10,
   '00000000-0000-0000-0000-000000000001'
-);
-
--- ---- Sample Profiles (Students) ----
--- Note: All emails use @example.com (RFC 2606 reserved for documentation/testing)
-INSERT INTO public.profiles (id, auth_id, email, full_name, role, student_id, grade_level, graduation_year, technical_skills, github_url, shirt_size, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, parent_consent_status, gpa_cleared, membership_active, travel_eligible) VALUES
-('p1000001', 'auth-student-001', 'alex.rodriguez@example.com', 'Alex Rodriguez', 'student', 'SAS2024001', 11, 2026, ARRAY['Python', 'React', 'TensorFlow'], 'https://github.com/alexrodriguez', 'M', 'Maria Rodriguez', '(305) 555-0101', 'Parent', 'approved', true, true, true),
-('p1000002', 'auth-student-002', 'jordan.chen@example.com', 'Jordan Chen', 'student', 'SAS2024002', 12, 2025, ARRAY['JavaScript', 'Node.js', 'Three.js', 'Blender'], 'https://github.com/jordanchen', 'L', 'David Chen', '(305) 555-0102', 'Parent', 'approved', true, true, true),
-('p1000003', 'auth-student-003', 'taylor.williams@example.com', 'Taylor Williams', 'student', 'SAS2024003', 10, 2027, ARRAY['Java', 'Android', 'Firebase', 'UI/UX'], 'https://github.com/taylorw', 'S', 'Pat Williams', '(305) 555-0103', 'Guardian', 'approved', true, true, true),
-('p1000004', 'auth-student-004', 'casey.kim@example.com', 'Casey Kim', 'student', 'SAS2024004', 11, 2026, ARRAY['Python', 'Django', 'PostgreSQL', 'Docker'], 'https://github.com/caseykim', 'M', 'Soo Kim', '(305) 555-0104', 'Parent', 'pending', false, true, false),
-('p1000005', 'auth-student-005', 'morgan.johnson@example.com', 'Morgan Johnson', 'student', 'SAS2024005', 12, 2025, ARRAY['Swift', 'iOS', 'ARKit', 'Machine Learning'], 'https://github.com/morganj', 'XL', 'Robert Johnson', '(305) 555-0105', 'Parent', 'approved', true, true, true),
-('p1000006', 'auth-student-006', 'riley.garcia@example.com', 'Riley Garcia', 'student', 'SAS2024006', 9, 2028, ARRAY['HTML/CSS', 'JavaScript', 'Figma'], NULL, 'M', 'Ana Garcia', '(305) 555-0106', 'Parent', 'not_submitted', false, true, false),
-('p1000007', 'auth-officer-001', 'dr.patel@example.com', 'Dr. Meera Patel', 'faculty_advisor', NULL, NULL, NULL, ARRAY['Computer Science Education'], NULL, NULL, NULL, NULL, NULL, NULL, true, true, true),
-('p1000008', 'auth-officer-002', 'sam.reyes@example.com', 'Sam Reyes', 'officer', 'SAS2024099', 12, 2025, ARRAY['React', 'TypeScript', 'Supabase', 'Leadership'], 'https://github.com/samreyes', 'L', 'Carlos Reyes', '(305) 555-0199', 'Parent', 'approved', true, true, true);
-
--- ---- Admin Whitelist for Staff ----
-INSERT INTO public.admin_whitelist (email, role, added_by) VALUES
-('dr.patel@example.com', 'faculty_advisor', 'p1000007'),
-('principal.leon@example.com', 'officer', 'p1000007');
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Equipment ----
 INSERT INTO public.equipment_items (id, name, category, serial_number, status) VALUES
-('eq001', 'Arduino Uno R4 WiFi', 'microcontroller', 'ARD-R4-001', 'available'),
-('eq002', 'ESP32 DevKit V1', 'microcontroller', 'ESP32-002', 'available'),
-('eq003', 'Raspberry Pi 5 8GB', 'microcontroller', 'RPI5-003', 'checked_out'),
-('eq004', 'USB-C Multimeter', 'testing_device', 'MM-004', 'available'),
-('eq005', 'Logic Analyzer 24ch', 'testing_device', 'LA-005', 'available'),
-('eq006', 'Breadboard Kit (large)', 'peripheral', 'BB-006', 'checked_out'),
-('eq007', 'Jumper Wire Set 400pc', 'cable', 'JW-007', 'available'),
-('eq008', 'HDMI Cable 6ft', 'cable', 'HDMI-008', 'available'),
-('eq009', 'USB-C Hub 7-port', 'peripheral', 'HUB-009', 'overdue'),
-('eq010', 'Portable Monitor 15"', 'peripheral', 'MON-010', 'missing');
+('00000000-0000-0000-0000-00000000e001', 'Arduino Uno R4 WiFi', 'microcontroller', 'ARD-R4-001', 'available'),
+('00000000-0000-0000-0000-00000000e002', 'ESP32 DevKit V1', 'microcontroller', 'ESP32-002', 'available'),
+('00000000-0000-0000-0000-00000000e003', 'Raspberry Pi 5 8GB', 'microcontroller', 'RPI5-003', 'checked_out'),
+('00000000-0000-0000-0000-00000000e004', 'USB-C Multimeter', 'testing_device', 'MM-004', 'available'),
+('00000000-0000-0000-0000-00000000e005', 'Logic Analyzer 24ch', 'testing_device', 'LA-005', 'available'),
+('00000000-0000-0000-0000-00000000e006', 'Breadboard Kit (large)', 'peripheral', 'BB-006', 'checked_out'),
+('00000000-0000-0000-0000-00000000e007', 'Jumper Wire Set 400pc', 'cable', 'JW-007', 'available'),
+('00000000-0000-0000-0000-00000000e008', 'HDMI Cable 6ft', 'cable', 'HDMI-008', 'available'),
+('00000000-0000-0000-0000-00000000e009', 'USB-C Hub 7-port', 'peripheral', 'HUB-009', 'overdue'),
+('00000000-0000-0000-0000-00000000e010', 'Portable Monitor 15"', 'peripheral', 'MON-010', 'missing')
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Checkouts ----
 INSERT INTO public.equipment_checkouts (id, equipment_id, user_id, checked_out_at, due_back_at, status) VALUES
-('co001', 'eq003', 'p1000001', NOW() - INTERVAL '5 days', NOW() + INTERVAL '5 days', 'active'),
-('co002', 'eq006', 'p1000002', NOW() - INTERVAL '3 days', NOW() + INTERVAL '2 days', 'active'),
-('co003', 'eq009', 'p1000005', NOW() - INTERVAL '14 days', NOW() - INTERVAL '2 days', 'overdue'),
-('co004', 'eq010', 'p1000004', NOW() - INTERVAL '30 days', NOW() - INTERVAL '10 days', 'lost');
+('00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000e003', '00000000-0000-0000-0000-000000000001', NOW() - INTERVAL '5 days', NOW() + INTERVAL '5 days', 'active'),
+('00000000-0000-0000-0000-00000000c002', '00000000-0000-0000-0000-00000000e006', '00000000-0000-0000-0000-000000000002', NOW() - INTERVAL '3 days', NOW() + INTERVAL '2 days', 'active'),
+('00000000-0000-0000-0000-00000000c003', '00000000-0000-0000-0000-00000000e009', '00000000-0000-0000-0000-000000000005', NOW() - INTERVAL '14 days', NOW() - INTERVAL '2 days', 'overdue'),
+('00000000-0000-0000-0000-00000000c004', '00000000-0000-0000-0000-00000000e010', '00000000-0000-0000-0000-000000000004', NOW() - INTERVAL '30 days', NOW() - INTERVAL '10 days', 'lost')
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Teams ----
 INSERT INTO public.teams (id, event_id, name, description, status, leader_id, max_members) VALUES
-('team001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'CodeTigers Alpha', 'Building an AI-powered study assistant for MDC students.', 'locked', 'p1000001', 4),
-('team002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'ByteWolves', 'Creating a real-time campus safety app with live location sharing.', 'inviting', 'p1000002', 4),
-('team003', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'Wolfson Wizards', 'Home team for the MDC Wolfson hackathon.', 'draft', 'p1000003', 4);
+('00000000-0000-0000-0000-0000000000f1', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'CodeTigers Alpha', 'Building an AI-powered study assistant for MDC students.', 'locked', '00000000-0000-0000-0000-000000000001', 4),
+('00000000-0000-0000-0000-0000000000f2', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'ByteWolves', 'Creating a real-time campus safety app with live location sharing.', 'inviting', '00000000-0000-0000-0000-000000000002', 4),
+('00000000-0000-0000-0000-0000000000f3', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'Wolfson Wizards', 'Home team for the MDC Wolfson hackathon.', 'draft', '00000000-0000-0000-0000-000000000003', 4)
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Team Members ----
 INSERT INTO public.team_members (id, team_id, user_id, role, invite_status) VALUES
-('tm001', 'team001', 'p1000001', 'leader', 'accepted'),
-('tm002', 'team001', 'p1000002', 'member', 'accepted'),
-('tm003', 'team001', 'p1000003', 'member', 'accepted'),
-('tm004', 'team001', 'p1000005', 'member', 'accepted'),
-('tm005', 'team002', 'p1000002', 'leader', 'accepted'),
-('tm006', 'team002', 'p1000004', 'member', 'pending'),
-('tm007', 'team003', 'p1000003', 'leader', 'accepted');
+('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-000000000001', 'leader', 'accepted'),
+('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-000000000003', 'member', 'accepted'),
+('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-000000000005', 'member', 'accepted'),
+('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-000000000002', 'leader', 'accepted'),
+('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-000000000004', 'member', 'pending'),
+('00000000-0000-0000-0000-000000000106', '00000000-0000-0000-0000-0000000000f3', '00000000-0000-0000-0000-000000000003', 'leader', 'accepted')
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Registrations ----
+-- team memberships: f1 = 0001/0003/0005, f2 = 0002/0004, f3 = 0003 (one team per student per event).
 INSERT INTO public.event_registrations (id, event_id, user_id, team_id, status, registered_at, deposit_paid, deposit_refunded, excused, transport_requested, transport_seat_confirmed, bus_seat_number) VALUES
-('reg001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000001', 'team001', 'approved_to_travel', NOW() - INTERVAL '30 days', true, false, false, true, true, 1),
-('reg002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000002', 'team001', 'approved_to_travel', NOW() - INTERVAL '29 days', true, false, false, true, true, 2),
-('reg003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000003', 'team001', 'approved_to_travel', NOW() - INTERVAL '28 days', true, false, false, true, true, 3),
-('reg004', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000005', 'team001', 'approved_to_travel', NOW() - INTERVAL '27 days', true, false, false, true, true, 4),
-('reg005', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000004', NULL, 'waitlisted', NOW() - INTERVAL '25 days', false, false, false, true, false, NULL),
-('reg006', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'p1000001', NULL, 'registered', NOW() - INTERVAL '10 days', false, false, false, true, false, NULL),
-('reg007', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'p1000003', 'team003', 'registered', NOW() - INTERVAL '8 days', false, false, false, true, false, NULL),
-('reg008', 'c3d4e5f6-a7b8-9012-cdef-123456789013', 'p1000002', NULL, 'registered', NOW() - INTERVAL '5 days', false, false, false, false, false, NULL),
-('reg009', 'd4e5f6a7-b8c9-0123-defa-234567890124', 'p1000005', NULL, 'registered', NOW() - INTERVAL '2 days', false, false, false, true, false, NULL);
+('00000000-0000-0000-0000-000000000201', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000f1', 'approved_to_travel', NOW() - INTERVAL '30 days', true, false, false, true, true, 1),
+('00000000-0000-0000-0000-000000000202', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000f1', 'approved_to_travel', NOW() - INTERVAL '29 days', true, false, false, true, true, 2),
+('00000000-0000-0000-0000-000000000203', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-0000000000f1', 'approved_to_travel', NOW() - INTERVAL '28 days', true, false, false, true, true, 3),
+('00000000-0000-0000-0000-000000000204', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000004', NULL, 'waitlisted', NOW() - INTERVAL '25 days', false, false, false, true, false, NULL),
+('00000000-0000-0000-0000-000000000205', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', '00000000-0000-0000-0000-000000000001', NULL, 'registered', NOW() - INTERVAL '10 days', false, false, false, true, false, NULL),
+('00000000-0000-0000-0000-000000000206', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000f3', 'registered', NOW() - INTERVAL '8 days', false, false, false, true, false, NULL),
+('00000000-0000-0000-0000-000000000207', 'c3d4e5f6-a7b8-9012-cdef-123456789013', '00000000-0000-0000-0000-000000000002', NULL, 'registered', NOW() - INTERVAL '5 days', false, false, false, false, false, NULL),
+('00000000-0000-0000-0000-000000000208', 'd4e5f6a7-b8c9-0123-defa-234567890124', '00000000-0000-0000-0000-000000000005', NULL, 'registered', NOW() - INTERVAL '2 days', false, false, false, true, false, NULL)
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Budget Ledger ----
 INSERT INTO public.budget_ledger (id, event_id, entry_type, description, amount, currency, submitted_by, status) VALUES
-('blg001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'allocation', 'Club funding allocation for ShellHacks 2025', 2000.00, 'USD', 'p1000007', 'approved'),
-('blg002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'bus_expense', 'Charter bus rental — ShellHanks transport', -850.00, 'USD', 'p1000008', 'approved'),
-('blg003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'ticket_expense', 'ShellHacks registration fees (4 students)', -160.00, 'USD', 'p1000008', 'approved'),
-('blg004', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'food_expense', 'Meal stipends — ShellHacks weekend', -400.00, 'USD', 'p1000008', 'pending'),
-('blg005', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'deposit', 'Student deposits collected', 80.00, 'USD', 'p1000008', 'approved'),
-('blg006', NULL, 'stipend', 'Stipend request — Alex Rodriguez (ShellHacks travel)', 150.00, 'USD', 'p1000001', 'pending'),
-('blg007', NULL, 'reimbursement', 'Receipt reimbursement — Jordan Chen (supplies)', 45.50, 'USD', 'p1000002', 'pending'),
-('blg008', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'allocation', 'MDC Wolfson hackathon budget', 1200.00, 'USD', 'p1000007', 'approved');
+('00000000-0000-0000-0000-00000000b001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'allocation', 'Club funding allocation for ShellHacks 2025', 2000.00, 'USD', '00000000-0000-0000-0000-000000000007', 'approved'),
+('00000000-0000-0000-0000-00000000b002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'bus_expense', 'Charter bus rental — ShellHanks transport', -850.00, 'USD', '00000000-0000-0000-0000-000000000008', 'approved'),
+('00000000-0000-0000-0000-00000000b003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'ticket_expense', 'ShellHacks registration fees (4 students)', -160.00, 'USD', '00000000-0000-0000-0000-000000000008', 'approved'),
+('00000000-0000-0000-0000-00000000b004', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'food_expense', 'Meal stipends — ShellHacks weekend', -400.00, 'USD', '00000000-0000-0000-0000-000000000008', 'pending'),
+('00000000-0000-0000-0000-00000000b005', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'deposit', 'Student deposits collected', 80.00, 'USD', '00000000-0000-0000-0000-000000000008', 'approved'),
+('00000000-0000-0000-0000-00000000b006', NULL, 'stipend', 'Stipend request — Alex Rodriguez (ShellHacks travel)', 150.00, 'USD', '00000000-0000-0000-0000-000000000001', 'pending'),
+('00000000-0000-0000-0000-00000000b007', NULL, 'reimbursement', 'Receipt reimbursement — Jordan Chen (supplies)', 45.50, 'USD', '00000000-0000-0000-0000-000000000002', 'pending'),
+('00000000-0000-0000-0000-00000000b008', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'allocation', 'MDC Wolfson hackathon budget', 1200.00, 'USD', '00000000-0000-0000-0000-000000000007', 'approved')
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Showcases (Published) ----
 INSERT INTO public.past_showcases (id, event_id, team_id, project_title, project_description, demo_url, screenshot_urls, awards_won, prize_money, status, published_by) VALUES
-('sc001', 'e5f6a7b8-c9d0-1234-efab-345678901235', 'team001', 'StudyBuddy AI', 'An AI-powered study assistant that generates personalized practice quizzes, flashcards, and study schedules based on student performance data. Built with Python, React, and OpenAI API.', 'https://studybuddy-ai-demo.vercel.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=StudyBuddy+Dashboard', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=AI+Quiz+Generator'], ARRAY['Best Use of AWS', 'Best Education Hack'], 2500.00, 'published', 'p1000008'),
-('sc002', 'e5f6a7b8-c9d0-1234-efab-345678901235', 'team002', 'CampusSafe Live', 'Real-time campus safety application with live location sharing, emergency alerts, and incident reporting. Features offline-first architecture using service workers and IndexedDB.', 'https://campussafe-live.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=Live+Map+View', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=Emergency+Alert'], ARRAY['Best Mobile Hack', 'Honorable Mention'], 500.00, 'published', 'p1000008'),
-('sc003', 'e5f6a7b8-c9d0-1234-efab-345678901235', 'team003', 'EcoRoute Miami', 'Sustainable transportation planner for Miami that optimizes bus routes, bike paths, and ride-sharing options to reduce carbon footprint. Uses real-time MDT bus data and Google Maps API.', 'https://ecoroute-miami.vercel.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=Route+Planner', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=Carbon+Savings'], ARRAY['Best Sustainability Hack'], 1000.00, 'published', 'p1000008');
+('00000000-0000-0000-0000-000000005001', 'e5f6a7b8-c9d0-1234-efab-345678901235', '00000000-0000-0000-0000-0000000000f1', 'StudyBuddy AI', 'An AI-powered study assistant that generates personalized practice quizzes, flashcards, and study schedules based on student performance data. Built with Python, React, and OpenAI API.', 'https://studybuddy-ai-demo.vercel.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=StudyBuddy+Dashboard', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=AI+Quiz+Generator'], ARRAY['Best Use of AWS', 'Best Education Hack'], 2500.00, 'published', '00000000-0000-0000-0000-000000000008'),
+('00000000-0000-0000-0000-000000005002', 'e5f6a7b8-c9d0-1234-efab-345678901235', '00000000-0000-0000-0000-0000000000f2', 'CampusSafe Live', 'Real-time campus safety application with live location sharing, emergency alerts, and incident reporting. Features offline-first architecture using service workers and IndexedDB.', 'https://campussafe-live.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=Live+Map+View', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=Emergency+Alert'], ARRAY['Best Mobile Hack', 'Honorable Mention'], 500.00, 'published', '00000000-0000-0000-0000-000000000008'),
+('00000000-0000-0000-0000-000000005003', 'e5f6a7b8-c9d0-1234-efab-345678901235', '00000000-0000-0000-0000-0000000000f3', 'EcoRoute Miami', 'Sustainable transportation planner for Miami that optimizes bus routes, bike paths, and ride-sharing options to reduce carbon footprint. Uses real-time MDT bus data and Google Maps API.', 'https://ecoroute-miami.vercel.app', ARRAY['https://placehold.co/600x400/0A192F/FFFFFF?text=Route+Planner', 'https://placehold.co/600x400/1E3A8A/FFFFFF?text=Carbon+Savings'], ARRAY['Best Sustainability Hack'], 1000.00, 'published', '00000000-0000-0000-0000-000000000008')
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Chaperone Assignments ----
 INSERT INTO public.chaperone_assignments (id, event_id, user_id, external_name, external_phone, role, confirmed) VALUES
-('chap001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000007', NULL, NULL, 'faculty_advisor', true),
-('chap002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'p1000008', NULL, NULL, 'officer', true),
-('chap003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', NULL, 'James Rivera', '(786) 555-0201', 'vetted_adult', true),
-('chap004', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', 'p1000007', NULL, NULL, 'faculty_advisor', false);
+('00000000-0000-0000-0000-00000000c001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000007', NULL, NULL, 'faculty_advisor', true),
+('00000000-0000-0000-0000-00000000c002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', '00000000-0000-0000-0000-000000000008', NULL, NULL, 'officer', true),
+('00000000-0000-0000-0000-00000000c003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567801', NULL, 'James Rivera', '(786) 555-0201', 'vetted_adult', true),
+('00000000-0000-0000-0000-00000000c004', 'b2c3d4e5-f6a7-8901-bcde-f12345678902', '00000000-0000-0000-0000-000000000007', NULL, NULL, 'faculty_advisor', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- ---- Sample Notifications ----
 INSERT INTO public.app_notifications (id, user_id, title, body, type, read) VALUES
-('notif001', 'p1000001', 'Registration Approved', 'Your registration for ShellHacks 2025 has been approved for travel!', 'success', false),
-('notif002', 'p1000001', 'Team Roster Locked', 'Your team "CodeTigers Alpha" roster has been finalized for ShellHacks 2025.', 'info', false),
-('notif003', 'p1000002', 'New Team Invite', 'Alex Rodriguez has invited you to join "CodeTigers Alpha" for ShellHacks 2025.', 'info', true),
-('notif004', 'p1000004', 'Parent Consent Pending', 'Your parent consent form is still pending. Upload it to become eligible for travel.', 'warning', false),
-('notif005', 'p1000005', 'Equipment Overdue', 'Your USB-C Hub (eq009) is overdue. Please return it to avoid check-in blocks.', 'urgent', false);
+('00000000-0000-0000-0000-00000000f001', '00000000-0000-0000-0000-000000000001', 'Registration Approved', 'Your registration for ShellHacks 2025 has been approved for travel!', 'success', false),
+('00000000-0000-0000-0000-00000000f002', '00000000-0000-0000-0000-000000000001', 'Team Roster Locked', 'Your team "CodeTigers Alpha" roster has been finalized for ShellHacks 2025.', 'info', false),
+('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-000000000002', 'New Team Invite', 'Alex Rodriguez has invited you to join "CodeTigers Alpha" for ShellHacks 2025.', 'info', true),
+('00000000-0000-0000-0000-00000000f004', '00000000-0000-0000-0000-000000000004', 'Parent Consent Pending', 'Your parent consent form is still pending. Upload it to become eligible for travel.', 'warning', false),
+('00000000-0000-0000-0000-00000000f005', '00000000-0000-0000-0000-000000000005', 'Equipment Overdue', 'Your USB-C Hub (eq009) is overdue. Please return it to avoid check-in blocks.', 'urgent', false)
+ON CONFLICT (id) DO NOTHING;
