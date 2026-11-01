@@ -1,5 +1,22 @@
 import { differenceInSeconds, intervalToDuration, format } from 'date-fns'
 
+/**
+ * Extract first name from a full name string.
+ */
+export function getFirstName(fullName: string): string {
+  if (!fullName) return ''
+  return fullName.trim().split(/\s+/)[0] || ''
+}
+
+/**
+ * Extract last name(s) from a full name string.
+ */
+export function getLastName(fullName: string): string {
+  if (!fullName) return ''
+  const parts = fullName.trim().split(/\s+/)
+  return parts.length > 1 ? parts.slice(1).join(' ') : ''
+}
+
 export interface TimeLeft {
   days: number
   hours: number

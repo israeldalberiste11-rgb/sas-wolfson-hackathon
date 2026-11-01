@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import type { UserProfile } from '../types'
+import { getFirstName, getLastName } from './utils'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key'
@@ -21,8 +23,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
+// Helper: enrich raw profile row with computed first/last name
+export function enrichProfile(profile: UserProfile | null): UserProfile | null {
+  if (!profile) return null
+  return {
+    ...profile,
+    first_name: getFirstName(profile.full_name),
+    last_name: getLastName(profile.full_name),
+  }
+}
+
 // Helper: get current user's profile (returns null when Supabase isn't configured)
-export async function getCurrentProfile() {
+export async function getCurrentProfile(): Promise<UserProfile | null> {
   if (!isSupabaseConfigured) return null
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -33,14 +45,15 @@ export async function getCurrentProfile() {
     .eq('auth_id', user.id)
     .single()
 
-  return profile ?? null
+  return enrichProfile(profile ?? null)
 }
 
 // Helper: check if email is allowed domain
 export function isAllowedStudentDomain(email: string): boolean {
-  return email.endsWith('@students.dadeschools.net')
+  return email.toLowerCase().endsWith('@students.dadeschools.net')
 }
 
 export function isAllowedStaffDomain(email: string): boolean {
-  return email.endsWith('@dadeschools.net') && !email.endsWith('@students.dadeschools.net')
+  const e = email.toLowerCase()
+  return e.endsWith('@dadeschools.net') && !e.endsWith('@students.dadeschools.net')
 }

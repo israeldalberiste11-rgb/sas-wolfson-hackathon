@@ -8,26 +8,28 @@ import StatusBadge from '../components/StatusBadge'
 import { Clock, Users, FileText, QrCode, AlertTriangle, CheckCircle2, Upload } from 'lucide-react'
 
 export default function StudentDashboard() {
-  const { profile, user } = useAuth()
+  const { profile } = useAuth()
   const [registrations, setRegistrations] = useState<EventRegistration[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<HackathonEvent[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) return
+    if (!profile) return
     async function loadDashboard() {
-      const userId = user!.id
+      const profileId = profile!.id
       const [regRes, teamRes, eventRes] = await Promise.all([
-        supabase.from('event_registrations').select('*, event:events(*)').eq('user_id', userId).order('registered_at', { ascending: false }),
-        supabase.from('team_members').select('*, team:teams(*)').eq('user_id', userId).eq('invite_status', 'accepted'),
+        supabase.from('event_registrations').select('*, event:events(*)').eq('user_id', profileId).order('registered_at', { ascending: false }),
+        supabase.from('team_members').select('*, team:teams(*)').eq('user_id', profileId).eq('invite_status', 'accepted'),
         supabase.from('events').select('*').in('event_status', ['upcoming', 'registration_open']).order('start_date_time', { ascending: true }).limit(6),
       ])
       if (regRes.data) setRegistrations(regRes.data as unknown as EventRegistration[])
       if (teamRes.data) setTeams((teamRes.data as Array<{ team: Team }>).map(t => t.team).filter(Boolean))
       if (eventRes.data) setUpcomingEvents(eventRes.data)
+      setLoading(false)
     }
     loadDashboard()
-  }, [user])
+  }, [profile])
 
   // Group registrations by status
   const upcomingRegs = registrations.filter((r: EventRegistration) => r.event?.event_status === 'upcoming' || r.event?.event_status === 'registration_open')
@@ -126,11 +128,17 @@ export default function StudentDashboard() {
           <h2 className="text-lg font-bold text-[#0A192F]">Discover Events</h2>
           <Link to="/events" className="text-sm text-[#1E3A8A] font-semibold hover:underline">View All →</Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {upcomingEvents.slice(0, 3).map(event => (
-            <EventMiniCard key={event.id} event={event} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => <div key={i} className="skeleton w-full h-28 rounded-xl" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {upcomingEvents.slice(0, 3).map(event => (
+              <EventMiniCard key={event.id} event={event} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )

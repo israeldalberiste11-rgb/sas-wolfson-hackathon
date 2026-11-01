@@ -10,7 +10,7 @@ import { Calendar, MapPin, Users, Bus, ExternalLink, Search } from 'lucide-react
 type TabKey = 'upcoming' | 'my_registrations' | 'past'
 
 export default function EventsPage() {
-  const { user } = useAuth()
+  const { profile } = useAuth()
   const [events, setEvents] = useState<HackathonEvent[]>([])
   const [registrations, setRegistrations] = useState<EventRegistration[]>([])
   const [activeTab, setActiveTab] = useState<TabKey>('upcoming')
@@ -21,14 +21,14 @@ export default function EventsPage() {
     async function load() {
       const [eventRes, regRes] = await Promise.all([
         supabase.from('events').select('*').order('start_date_time', { ascending: true }),
-        user ? supabase.from('event_registrations').select('*, event:events(*)').eq('user_id', user.id) : Promise.resolve({ data: [] }),
+        profile ? supabase.from('event_registrations').select('*, event:events(*)').eq('user_id', profile.id) : Promise.resolve({ data: [] }),
       ])
       if (eventRes.data) setEvents(eventRes.data)
       if (regRes.data) setRegistrations(regRes.data as unknown as EventRegistration[])
       setLoading(false)
     }
     load()
-  }, [user])
+  }, [profile])
 
   const filteredEvents = events.filter(e =>
     e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -96,7 +96,7 @@ export default function EventsPage() {
               registration={registrations.find(r => r.event_id === event.id)}
               isRegistered={!!registrations.find(r => r.event_id === event.id)}
               onRegister={async () => {
-                if (!user) {
+                if (!profile) {
                   window.location.href = '/login'
                   return
                 }
@@ -106,21 +106,22 @@ export default function EventsPage() {
                   .from('event_registrations')
                   .select('id')
                   .eq('event_id', event.id)
-                  .eq('user_id', user.id)
+                  .eq('user_id', profile.id)
                   .maybeSingle()
                 if (existing) return
-                // Count current registrations to determine waitlist
+                // Count current active registrations to determine waitlist
                 const { count } = await supabase
                   .from('event_registrations')
                   .select('id', { count: 'exact', head: true })
                   .eq('event_id', event.id)
                   .in('status', ['registered', 'approved_to_travel'])
-                const isWaitlist = (count ?? 0) >= event.bus_capacity
+                const activeCount = count ?? 0
+                const isWaitlist = activeCount >= event.bus_capacity
                 await supabase.from('event_registrations').insert({
                   event_id: event.id,
-                  user_id: user.id,
+                  user_id: profile.id,
                   status: isWaitlist ? 'waitlisted' : 'registered',
-                  waitlist_position: isWaitlist ? (count ?? 0) + 1 : null,
+                  waitlist_position: isWaitlist ? activeCount + 1 : null,
                   transport_requested: event.transport_provided,
                   deposit_paid: false,
                   deposit_refunded: false,
@@ -132,7 +133,7 @@ export default function EventsPage() {
                 const { data: regData } = await supabase
                   .from('event_registrations')
                   .select('*, event:events(*)')
-                  .eq('user_id', user.id)
+                  .eq('user_id', profile.id)
                 if (regData) setRegistrations(regData as unknown as EventRegistration[])
               }}
             />

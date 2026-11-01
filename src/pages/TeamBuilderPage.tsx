@@ -5,7 +5,7 @@ import type { HackathonEvent, Team, TeamMember, UserProfile } from '../types'
 import { Users, Plus, Lock, Search, UserPlus, Crown, Mail } from 'lucide-react'
 
 export default function TeamBuilderPage() {
-  const { user, profile } = useAuth()
+  const { profile } = useAuth()
   const [events, setEvents] = useState<HackathonEvent[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [myTeams, setMyTeams] = useState<Team[]>([])
@@ -19,10 +19,10 @@ export default function TeamBuilderPage() {
 
   useEffect(() => {
     async function load() {
-      if (!user) return
+      if (!profile) return
       const [eventRes, teamRes] = await Promise.all([
         supabase.from('events').select('*').in('event_status', ['upcoming', 'registration_open']).order('start_date_time', { ascending: true }),
-        supabase.from('team_members').select('*, team:teams(*)').eq('user_id', user.id).eq('invite_status', 'accepted'),
+        supabase.from('team_members').select('*, team:teams(*)').eq('user_id', profile.id).eq('invite_status', 'accepted'),
       ])
       if (eventRes.data) setEvents(eventRes.data)
       if (teamRes.data) {
@@ -32,7 +32,7 @@ export default function TeamBuilderPage() {
       setLoading(false)
     }
     load()
-  }, [user])
+  }, [profile])
 
   // Load team details when selected
   useEffect(() => {
@@ -46,14 +46,14 @@ export default function TeamBuilderPage() {
   }, [currentTeam])
 
   const createTeam = async () => {
-    if (!user || !selectedEventId) return
+    if (!profile || !selectedEventId) return
     const event = events.find(e => e.id === selectedEventId)
     if (!event) return
 
     const { data: team } = await supabase.from('teams').insert({
       event_id: selectedEventId,
       name: `${profile?.full_name || 'My'}'s Team`,
-      leader_id: user.id,
+      leader_id: profile.id,
       max_members: event.max_team_size,
       status: 'draft',
     }).select().single()
@@ -62,7 +62,7 @@ export default function TeamBuilderPage() {
       // Auto-add leader as member
       await supabase.from('team_members').insert({
         team_id: team.id,
-        user_id: user.id,
+        user_id: profile.id,
         role: 'leader',
         invite_status: 'accepted',
       })
@@ -133,7 +133,7 @@ export default function TeamBuilderPage() {
     setTimeout(() => setActionMsg(''), 4000)
   }
 
-  const isLeader = currentTeam?.leader_id === user?.id
+  const isLeader = currentTeam?.leader_id === profile?.id
 
   return (
     <div className="page-container">

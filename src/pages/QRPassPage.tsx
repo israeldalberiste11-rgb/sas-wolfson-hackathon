@@ -8,7 +8,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { QrCode, Download, Wifi, WifiOff } from 'lucide-react'
 
 export default function QRPassPage() {
-  const { user, profile } = useAuth()
+  const { profile } = useAuth()
   const [registrations, setRegistrations] = useState<EventRegistration[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -22,11 +22,11 @@ export default function QRPassPage() {
     window.addEventListener('offline', handleOffline)
 
     async function load() {
-      if (!user) return
+      if (!profile) return
 
       // Try offline cache first if no network
       if (!navigator.onLine) {
-        const cached = await getCachedQRPass(user.id)
+        const cached = await getCachedQRPass(profile.id)
         if (cached) {
           setRegistrations([{
             id: cached.eventId,
@@ -79,7 +79,7 @@ export default function QRPassPage() {
       const { data } = await supabase
         .from('event_registrations')
         .select('*, event:events(*)')
-        .eq('user_id', user.id)
+        .eq('user_id', profile.id)
         .in('status', ['registered', 'approved_to_travel'])
         .order('registered_at', { ascending: false })
 
@@ -90,10 +90,10 @@ export default function QRPassPage() {
         const r = reg as unknown as EventRegistration
         if (r.event) {
           await cacheQRPass({
-            userId: user.id,
+            userId: profile.id,
             eventId: r.event_id,
-            qrData: generateQRPassData(user.id, r.event_id, profile?.full_name || ''),
-            userName: profile?.full_name || '',
+            qrData: generateQRPassData(profile.id, r.event_id, profile.full_name || ''),
+            userName: profile.full_name || '',
             eventName: r.event.name,
             cachedAt: Date.now(),
           })
@@ -107,10 +107,10 @@ export default function QRPassPage() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [user, profile])
+  }, [profile])
 
   const selectedReg = registrations.find(r => r.event_id === selectedEventId) || registrations[0]
-  const qrData = selectedReg ? generateQRPassData(user?.id || '', selectedReg.event_id, profile?.full_name || '') : ''
+  const qrData = selectedReg ? generateQRPassData(profile?.id || '', selectedReg.event_id, profile?.full_name || '') : ''
 
   return (
     <div className="page-container">

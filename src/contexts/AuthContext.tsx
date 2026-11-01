@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { type User, type Session, AuthError } from '@supabase/supabase-js'
-import { supabase, getCurrentProfile, isSupabaseConfigured, isAllowedStudentDomain, isAllowedStaffDomain } from '../lib/supabase'
+import { supabase, getCurrentProfile, isSupabaseConfigured, isAllowedStudentDomain, isAllowedStaffDomain, enrichProfile } from '../lib/supabase'
 import type { UserProfile, UserRole } from '../types'
 
 interface AuthState {
@@ -32,6 +32,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error: null,
   })
 
+  // Bootstrap a profile for first-time sign-ins.
+  // Students with @students.dadeschools.net get a student profile.
+  // Staff with @dadeschools.net must be in admin_whitelist.
+  const ensureProfile = useCallback(async (user: User): Promise<UserProfile | null> => {
+    if (!isSupabaseConfigured) return null
+
+    const email = user.email?.toLowerCase() || ''
+    const isStudent = isAllowedStudentDomain(email)
+    const isStaff = isAllowedStaffDomain(email)
+
+    if (!isStudent && !isStaff) {
+      console.warn(`Rejected unauthorized domain: ${email}`)
+      await supabase.auth.signOut()
+      return null
+    }
+
+    // Try to fetch existing profile first
+    let { data: existing } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    if (existing) return enrichProfile(existing)
+
+    // For staff, require whitelist match
+    if (isStaff) {
+      const { data: whitelist } = await supabase
+        .from('admin_whitelist')
+        .select('role')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (!whitelist) {
+        console.warn(`Staff email not whitelisted: ${email}`)
+        await supabase.auth.signOut()
+        return null
+      }
+
+      const { data: inserted, error } = await supabase
+        .from('profiles')
+        .insert({
+          auth_id: user.id,
+          email,
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0],
+          role: whitelist.role,
+          is_whitelisted_staff: true,
+          membership_active: true,
+          gpa_cleared: true,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Staff profile creation failed:', error)
+        return null
+      }
+      return enrichProfile(inserted)
+    }
+
+    // Student profile creation
+    const fullName = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0]
+    const { data: inserted, error } = await supabase
+      .from('profiles')
+      .insert({
+        auth_id: user.id,
+        email,
+        full_name: fullName,
+        role: 'student',
+        membership_active: false,
+        gpa_cleared: false,
+        parent_consent_status: 'not_submitted',
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Student profile creation failed:', error)
+      return null
+    }
+    return enrichProfile(inserted)
+  }, [])
+
   const refreshProfile = useCallback(async () => {
     const profile = await getCurrentProfile()
     setState(prev => ({ ...prev, profile, loading: false }))
@@ -48,10 +131,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // unreachable or credentials are placeholders
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
-        setState(prev => ({ ...prev, session, user: session?.user ?? null }))
-        if (session?.user) {
+        const user = session?.user ?? null
+        setState(prev => ({ ...prev, session, user }))
+        if (user) {
           try {
-            const profile = await getCurrentProfile()
+            const profile = await ensureProfile(user)
             setState(prev => ({ ...prev, profile, loading: false }))
           } catch {
             setState(prev => ({ ...prev, loading: false }))
@@ -64,16 +148,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        const user = session?.user ?? null
         setState(prev => ({
           ...prev,
           session,
-          user: session?.user ?? null,
+          user,
           profile: null,
           error: null,
         }))
-        if (session?.user) {
+        if (user) {
           try {
-            const profile = await getCurrentProfile()
+            const profile = await ensureProfile(user)
             setState(prev => ({ ...prev, profile, loading: false }))
           } catch (err) {
             console.warn('Profile load failed:', err)
@@ -86,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
-  }, [refreshProfile])
+  }, [ensureProfile])
 
   const signInWithGoogle = async () => {
     if (!isSupabaseConfigured) {

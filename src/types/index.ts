@@ -10,8 +10,10 @@ export interface UserProfile {
   auth_id?: string;
   email: string;
   full_name: string;
-  first_name: string;
-  last_name: string;
+  /** Computed from full_name; not stored in DB */
+  first_name?: string;
+  /** Computed from full_name; not stored in DB */
+  last_name?: string;
   role: UserRole;
   student_id?: string;
   grade_level?: number;       // 9-12

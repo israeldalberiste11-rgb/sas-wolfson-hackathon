@@ -535,6 +535,13 @@ CREATE POLICY "Admins can insert profiles" ON public.profiles
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('officer', 'faculty_advisor'))
   );
 
+-- Allow authenticated users to create their own profile on first sign-in.
+-- Restricted to role='student' with no privilege escalation; staff still requires whitelist.
+CREATE POLICY "Users can create own student profile" ON public.profiles
+  FOR INSERT WITH CHECK (
+    auth.uid() = auth_id AND role = 'student'
+  );
+
 -- ---- EVENTS RLS ----
 -- Authenticated users can view events
 CREATE POLICY "Authenticated users can view events" ON public.events
